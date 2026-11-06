@@ -20,11 +20,12 @@ It is built on Apple's PDFKit (the same engine Preview uses) and needs **macOS 1
    ```bash
    xcode-select --install
    ```
-2. Unzip this folder, open **Terminal**, and run:
+2. Open **Terminal** and run:
    ```bash
-   bash ~/Downloads/PDFReader/install.sh
+   git clone https://github.com/techmalik/PDFReader.git
+   bash PDFReader/install.sh
    ```
-   (adjust the path if you unzipped it elsewhere). This builds `PDFReader.app`, copies it to
+   This builds `PDFReader.app`, copies it to
    `/Applications`, and launches it.
 
 ## Make it your default PDF app
@@ -39,3 +40,10 @@ You can also do it later in either of these ways:
 - To update after changing the code, run `install.sh` again.
 - To uninstall, drag `/Applications/PDFReader.app` to the Trash. To restore Acrobat or Preview as
   the default, use the Finder **Get Info ▸ Open with ▸ Change All…** steps above.
+
+## Contributing
+Issues and pull requests are welcome. The app is plain Swift with no dependencies:
+the sources are in `Sources/`, and `bash install.sh --build` compiles it into `./build`.
+
+## License
+[MIT](LICENSE) © 2026 Malik Kabir
