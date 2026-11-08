@@ -22,6 +22,8 @@ final class RecentFilesWindowController: NSWindowController, NSTableViewDataSour
         buildContent(in: window)
         window.center()
         window.setFrameAutosaveName("PDFReaderRecentWindow")
+        NotificationCenter.default.addObserver(self, selector: #selector(recentsChanged(_:)),
+                                               name: ReaderDocumentController.recentsDidChange, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -107,6 +109,10 @@ final class RecentFilesWindowController: NSWindowController, NSTableViewDataSour
         ])
 
         window.contentView = content
+    }
+
+    @objc private func recentsChanged(_ notification: Notification) {
+        if window?.isVisible == true { reload() }
     }
 
     private func reload() {
