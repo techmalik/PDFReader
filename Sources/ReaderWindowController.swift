@@ -45,6 +45,9 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
                               backing: .buffered, defer: false)
         window.minSize = NSSize(width: 520, height: 400)
         window.toolbarStyle = .unified
+        // Open each PDF as a tab in the existing window, regardless of the system "Prefer tabs" setting.
+        window.tabbingMode = .preferred
+        window.tabbingIdentifier = "PDFReaderDocument"
         super.init(window: window)
 
         window.delegate = self
