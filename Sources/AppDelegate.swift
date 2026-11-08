@@ -2,6 +2,31 @@ import AppKit
 import PDFKit
 import UniformTypeIdentifiers
 
+/// Who made PDFReader and where to reach them. Shown in the About panel and the Help menu.
+enum Project {
+    static let creator = "Malik Kabir"
+    static let feedbackEmail = "techmaleek@gmail.com"
+    static let repositoryURL = URL(string: "https://github.com/techmalik/PDFReader")!
+    static let issuesURL = URL(string: "https://github.com/techmalik/PDFReader/issues")!
+
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
+    /// mailto: link with the app and macOS versions filled in, so feedback arrives with context.
+    static var feedbackMailURL: URL {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = feedbackEmail
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "PDFReader feedback (v\(version))"),
+            URLQueryItem(name: "body", value: "\n\n—\nPDFReader \(version) · macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"),
+        ]
+        return components.url ?? URL(string: "mailto:\(feedbackEmail)")!
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     private var recentFilesWindow: RecentFilesWindowController?
     private let openRecentMenu = NSMenu(title: "Open Recent")
@@ -11,9 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMainMenu()
+        Appearance.apply()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        SignaturesWindowController.shared.onPlace = { signature in
+            guard let reader = ReaderWindowController.frontmost else { NSSound.beep(); return }
+            reader.place(signature)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
             self?.offerToBecomeDefaultIfNeeded()
         }
@@ -44,6 +74,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         if recentFilesWindow == nil { recentFilesWindow = RecentFilesWindowController() }
         recentFilesWindow?.showWindow(sender)
         recentFilesWindow?.window?.makeKeyAndOrderFront(sender)
+    }
+
+    // MARK: - About & feedback
+
+    @objc func showAbout(_ sender: Any?) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let base: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let credits = NSMutableAttributedString(string: "A lightweight, open-source PDF reader for macOS.\nCreated by \(Project.creator).\n\n", attributes: base)
+        func link(_ text: String, _ url: URL) -> NSAttributedString {
+            var attrs = base
+            attrs[.link] = url
+            return NSAttributedString(string: text, attributes: attrs)
+        }
+        credits.append(NSAttributedString(string: "Feedback: ", attributes: base))
+        credits.append(link(Project.feedbackEmail, Project.feedbackMailURL))
+        credits.append(NSAttributedString(string: "\nSource: ", attributes: base))
+        credits.append(link("github.com/techmalik/PDFReader", Project.repositoryURL))
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .credits: credits,
+            .applicationName: "PDFReader",
+        ])
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func sendFeedback(_ sender: Any?) { NSWorkspace.shared.open(Project.feedbackMailURL) }
+    @objc func openIssues(_ sender: Any?) { NSWorkspace.shared.open(Project.issuesURL) }
+    @objc func openRepository(_ sender: Any?) { NSWorkspace.shared.open(Project.repositoryURL) }
+
+    // MARK: - Appearance
+
+    @objc func setAppearanceMode(_ sender: NSMenuItem) {
+        Appearance.mode = Appearance.Mode(rawValue: sender.tag) ?? .system
+    }
+
+    @objc func setPageColors(_ sender: NSMenuItem) {
+        Appearance.pageColors = Appearance.PageColors(rawValue: sender.tag) ?? .normal
+    }
+
+    @objc func showSignatures(_ sender: Any?) {
+        SignaturesWindowController.shared.show()
     }
 
     @objc private func openRecentItem(_ sender: NSMenuItem) {
@@ -98,6 +173,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     // MARK: - Menu validation & Open Recent
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(setAppearanceMode(_:)) {
+            menuItem.state = menuItem.tag == Appearance.mode.rawValue ? .on : .off
+            return true
+        }
+        if menuItem.action == #selector(setPageColors(_:)) {
+            menuItem.state = menuItem.tag == Appearance.pageColors.rawValue ? .on : .off
+            return true
+        }
         if menuItem.action == #selector(makeDefault(_:)) {
             let isDefault = isDefaultPDFApp()
             menuItem.title = isDefault ? "PDFReader Is Your Default PDF App" : "Make PDFReader the Default PDF App"
@@ -142,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         // App menu
         let appMenu = NSMenu(title: "PDFReader")
-        appMenu.addItem(withTitle: "About PDFReader", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About PDFReader", action: #selector(showAbout(_:)), keyEquivalent: "").target = self
         appMenu.addItem(.separator())
         let defaultItem = appMenu.addItem(withTitle: "Make PDFReader the Default PDF App", action: #selector(makeDefault(_:)), keyEquivalent: "")
         defaultItem.target = self
@@ -166,6 +249,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         recentWindow.target = self
         file.addItem(.separator())
         file.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        file.addItem(withTitle: "Save", action: #selector(NSDocument.save(_:)), keyEquivalent: "s")
+        let saveAs = file.addItem(withTitle: "Save As…", action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "s")
+        saveAs.keyEquivalentModifierMask = [.command, .shift]
+        file.addItem(withTitle: "Revert to Saved", action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+        file.addItem(.separator())
+        file.addItem(withTitle: "Properties…", action: #selector(ReaderWindowController.showProperties(_:)), keyEquivalent: "i")
         file.addItem(.separator())
         let pageSetup = file.addItem(withTitle: "Page Setup…", action: #selector(NSDocument.runPageLayout(_:)), keyEquivalent: "p")
         pageSetup.keyEquivalentModifierMask = [.command, .shift]
@@ -174,9 +263,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         // Edit
         let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         edit.addItem(.separator())
         edit.addItem(withTitle: "Find…", action: #selector(ReaderWindowController.focusSearch(_:)), keyEquivalent: "f")
@@ -209,9 +303,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             item.tag = mode.rawValue
         }
         view.addItem(.separator())
+        let appearanceMenu = NSMenu(title: "Appearance")
+        for mode in Appearance.Mode.allCases {
+            let item = appearanceMenu.addItem(withTitle: mode.title, action: #selector(setAppearanceMode(_:)), keyEquivalent: "")
+            item.tag = mode.rawValue
+            item.target = self
+        }
+        view.addItem(withTitle: "Appearance", action: nil, keyEquivalent: "").submenu = appearanceMenu
+        let pageColorsMenu = NSMenu(title: "Page Colors")
+        for colors in Appearance.PageColors.allCases {
+            let item = pageColorsMenu.addItem(withTitle: colors.title, action: #selector(setPageColors(_:)), keyEquivalent: "")
+            item.tag = colors.rawValue
+            item.target = self
+        }
+        view.addItem(withTitle: "Page Colors", action: nil, keyEquivalent: "").submenu = pageColorsMenu
+        let darkToggle = view.addItem(withTitle: "Toggle Dark Pages", action: #selector(ReaderWindowController.toggleDarkPages(_:)), keyEquivalent: "d")
+        darkToggle.keyEquivalentModifierMask = [.command, .shift]
+        view.addItem(.separator())
         let fullScreen = view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fullScreen.keyEquivalentModifierMask = [.command, .control]
         addSubmenu(view, to: main)
+
+        // Sign
+        let sign = NSMenu(title: "Sign")
+        sign.addItem(withTitle: "Draw New Signature…", action: #selector(ReaderWindowController.drawNewSignature(_:)), keyEquivalent: "")
+        sign.addItem(withTitle: "Import Signature Image…", action: #selector(ReaderWindowController.importSignature(_:)), keyEquivalent: "")
+        let manage = sign.addItem(withTitle: "Manage Signatures…", action: #selector(showSignatures(_:)), keyEquivalent: "")
+        manage.target = self
+        addSubmenu(sign, to: main)
 
         // Go
         let go = NSMenu(title: "Go")
@@ -235,6 +354,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         addSubmenu(window, to: main)
         NSApp.windowsMenu = window
+
+        // Help
+        let help = NSMenu(title: "Help")
+        help.addItem(withTitle: "Send Feedback…", action: #selector(sendFeedback(_:)), keyEquivalent: "").target = self
+        help.addItem(withTitle: "Report an Issue on GitHub…", action: #selector(openIssues(_:)), keyEquivalent: "").target = self
+        help.addItem(.separator())
+        help.addItem(withTitle: "PDFReader on GitHub", action: #selector(openRepository(_:)), keyEquivalent: "").target = self
+        addSubmenu(help, to: main)
+        NSApp.helpMenu = help
 
         return main
     }

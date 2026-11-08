@@ -1,7 +1,8 @@
 import AppKit
 import PDFKit
 
-/// A read-only PDF document. The class name is referenced from Info.plist (NSDocumentClass).
+/// A PDF document. Its properties can be edited and signatures added, then saved back to the file.
+/// The class name is referenced from Info.plist (NSDocumentClass).
 @objc(PDFReaderDocument)
 final class PDFReaderDocument: NSDocument {
     private(set) var pdf: PDFDocument?
@@ -9,7 +10,10 @@ final class PDFReaderDocument: NSDocument {
     override class var autosavesInPlace: Bool { false }
 
     override func read(from url: URL, ofType typeName: String) throws {
-        guard let document = PDFDocument(url: url) else {
+        // Load the bytes rather than PDFDocument(url:) so saving over the same file is safe:
+        // the in-memory copy never depends on the file that NSDocument replaces when it saves.
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        guard let document = PDFDocument(data: data) else {
             throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadCorruptFileError, userInfo: [
                 NSLocalizedDescriptionKey: "“\(url.lastPathComponent)” couldn’t be opened.",
                 NSLocalizedRecoverySuggestionErrorKey: "The file may be damaged or may not be a PDF.",
@@ -21,8 +25,39 @@ final class PDFReaderDocument: NSDocument {
         pdf = document
     }
 
-    override func data(ofType typeName: String) throws -> Data {
-        throw NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError)
+    // MARK: - Saving
+
+    /// Why this PDF can't be changed, or nil if it can.
+    var editingBlockedReason: String? {
+        guard let pdf = pdf else { return "The document isn’t loaded." }
+        if pdf.isEncrypted {
+            return "This PDF is password protected or encrypted. Saving changes would remove that protection, so PDFReader leaves it unchanged."
+        }
+        if !pdf.allowsDocumentChanges && !pdf.allowsCommenting {
+            return "The document’s author doesn’t allow changes to this PDF."
+        }
+        return nil
+    }
+
+    override func write(to url: URL, ofType typeName: String) throws {
+        guard let pdf = pdf else {
+            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
+        }
+        if let reason = editingBlockedReason {
+            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [
+                NSLocalizedDescriptionKey: "“\(displayName ?? "This PDF")” can’t be saved.",
+                NSLocalizedRecoverySuggestionErrorKey: reason,
+            ])
+        }
+        windowControllers.compactMap { $0 as? ReaderWindowController }.forEach { $0.prepareForSave() }
+        var attributes = pdf.documentAttributes ?? [:]
+        attributes[PDFDocumentAttribute.modificationDateAttribute] = Date()
+        pdf.documentAttributes = attributes
+        guard pdf.write(to: url) else {
+            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError, userInfo: [
+                NSLocalizedDescriptionKey: "“\(displayName ?? "This PDF")” couldn’t be saved.",
+            ])
+        }
     }
 
     override func makeWindowControllers() {
