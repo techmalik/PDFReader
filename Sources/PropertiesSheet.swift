@@ -212,23 +212,29 @@ final class PropertiesSheet: NSWindowController {
             pdfDocument.updateChangeCount(.changeDone)
         }
 
+        // Close the sheet first, then save. Saving starts its own file access, so it must not begin
+        // inside the rename's file access (AppKit aborts if it does).
+        let document = pdfDocument
         let finish: () -> Void = { [weak self] in
-            guard let self = self else { return }
-            if metadataChanged || self.pdfDocument.isDocumentEdited {
-                self.pdfDocument.save(nil)
+            self?.close(nil)
+            if metadataChanged || document.isDocumentEdited {
+                document.save(nil)
             }
-            self.close(nil)
         }
 
         if let newURL = newURL {
             pdfDocument.move(to: newURL) { [weak self] error in
-                if let error = error {
-                    if let sheet = self?.window {
-                        sheet.presentError(error, modalFor: sheet, delegate: nil, didPresent: nil, contextInfo: nil)
+                // The completion handler runs while the rename still holds the document's file
+                // access; continue on the next turn of the run loop, once it has been released.
+                DispatchQueue.main.async {
+                    if let error = error {
+                        if let sheet = self?.window {
+                            sheet.presentError(error, modalFor: sheet, delegate: nil, didPresent: nil, contextInfo: nil)
+                        }
+                        return
                     }
-                    return
+                    finish()
                 }
-                finish()
             }
         } else {
             finish()
