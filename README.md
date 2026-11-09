@@ -19,6 +19,10 @@ Created by **Malik Kabir**. Free and open source under the [MIT License](LICENSE
   from a photo or scan, then place one on any page from the **Sign** toolbar button. Drag to move,
   drag the corner handle to resize, Delete to remove, ⌘Z to undo. Save with ⌘S; the signature is
   written into the file, so it shows in Preview, Acrobat and browsers too.
+- **Info pane:** click the ⓘ toolbar button (or View ▸ Show Info, ⌥⌘I) for a panel on the right with
+  the document's title, author, subject, keywords, creator, producer and dates; the current page's size
+  (mm, inches and points), paper name and orientation; file name, size and location; page count,
+  PDF version, and whether printing, copying and changes are allowed.
 - **Edit properties:** File ▸ Properties… (⌘I) to rename the file and edit the PDF's title, author,
   subject, keywords and creator. Also shows producer, dates, page count, PDF version and size.
 - **Dark mode:** follows macOS, or pick Light or Dark under View ▸ Appearance. **Dark pages**

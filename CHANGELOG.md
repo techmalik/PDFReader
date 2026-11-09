@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **Info pane:** the ⓘ toolbar button (View ▸ Show Info, ⌥⌘I) opens a panel on the right with the
+  PDF's details: title, author, creator, dates, page size and paper, file size, location, PDF version
+  and security. It follows the page you're on and remembers whether it was open.
+
 ## 1.1
 - **Sign PDFs:** save up to 5 signatures (draw with mouse/trackpad, or import a photo or scan),
   place them on any page, move, resize, delete, undo. Signatures are saved into the PDF.

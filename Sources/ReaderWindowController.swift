@@ -7,7 +7,7 @@ private extension NSToolbarItem.Identifier {
     static let readerPrint = NSToolbarItem.Identifier("pdfreader.print")
     static let readerSearch = NSToolbarItem.Identifier("pdfreader.search")
     static let readerSign = NSToolbarItem.Identifier("pdfreader.sign")
-    static let readerProperties = NSToolbarItem.Identifier("pdfreader.properties")
+    static let readerInfo = NSToolbarItem.Identifier("pdfreader.info")
     static let readerDarkPages = NSToolbarItem.Identifier("pdfreader.darkPages")
 }
 
@@ -19,6 +19,9 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
     private weak var searchItem: NSSearchToolbarItem?
     private let signMenu = NSMenu(title: "Sign")
     private var propertiesSheet: PropertiesSheet?
+    private let infoPane: InfoPaneViewController
+    private var infoItem: NSSplitViewItem?
+    private static let infoVisibleKey = "infoPaneVisible"
 
     /// The reader window the user is working in, for actions that come from other windows.
     static var frontmost: ReaderWindowController? {
@@ -37,6 +40,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
         pdfView = view
         self.fileURL = fileURL
         sidebar = SidebarViewController(pdfView: view)
+        infoPane = InfoPaneViewController(pdfView: view)
 
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let size = NSSize(width: min(1100, screenFrame.width * 0.85), height: min(900, screenFrame.height * 0.9))
@@ -51,6 +55,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
         super.init(window: window)
 
         window.delegate = self
+        infoPane.onEdit = { [weak self] in self?.showProperties(nil) }
         configurePDFView(with: pdf)
         configureLayout(in: window, size: size)
         configureToolbar(in: window)
@@ -94,6 +99,15 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
 
         splitViewController.addSplitViewItem(sidebarItem)
         splitViewController.addSplitViewItem(contentItem)
+
+        let info = NSSplitViewItem(viewController: infoPane)
+        info.minimumThickness = 220
+        info.maximumThickness = 380
+        info.canCollapse = true
+        info.holdingPriority = NSLayoutConstraint.Priority(260)
+        info.isCollapsed = !UserDefaults.standard.bool(forKey: Self.infoVisibleKey)
+        splitViewController.addSplitViewItem(info)
+        infoItem = info
         splitViewController.view.frame = NSRect(origin: .zero, size: size)
         window.contentViewController = splitViewController
         window.setContentSize(size)
@@ -110,7 +124,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
     // MARK: - Toolbar
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .flexibleSpace, .readerZoomOut, .readerZoomIn, .readerSign, .readerProperties, .readerDarkPages, .readerPrint, .readerSearch]
+        [.toggleSidebar, .flexibleSpace, .readerZoomOut, .readerZoomIn, .readerSign, .readerDarkPages, .readerPrint, .readerSearch, .readerInfo]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -128,8 +142,10 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
             return makeButtonItem(itemIdentifier, "Print", "printer", #selector(printFromToolbar(_:)))
         case .readerDarkPages:
             return makeButtonItem(itemIdentifier, "Dark Pages", "moon", #selector(toggleDarkPages(_:)))
-        case .readerProperties:
-            return makeButtonItem(itemIdentifier, "Properties", "info.circle", #selector(showProperties(_:)))
+        case .readerInfo:
+            let item = makeButtonItem(itemIdentifier, "Info", "info.circle", #selector(toggleInfoPane(_:)))
+            item.toolTip = "Show or hide document info (⌥⌘I)"
+            return item
         case .readerSign:
             let item = NSMenuToolbarItem(itemIdentifier: itemIdentifier)
             item.label = "Sign"
@@ -215,6 +231,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
 
     @objc private func pageChanged(_ notification: Notification) {
         updatePageSubtitle()
+        if infoItem?.isCollapsed == false { infoPane.refreshPage() }
     }
 
     private func updatePageSubtitle() {
@@ -289,12 +306,34 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
 
     private var readerDocument: PDFReaderDocument? { document as? PDFReaderDocument }
 
+    override var document: AnyObject? {
+        didSet { infoPane.document = document as? PDFReaderDocument }
+    }
+
     @objc func showProperties(_ sender: Any?) {
         guard let window = window, let doc = readerDocument, let pdf = pdfView.document,
               propertiesSheet == nil, window.attachedSheet == nil else { return }
         let sheet = PropertiesSheet(document: doc, pdf: pdf)
         propertiesSheet = sheet
-        sheet.begin(for: window) { [weak self] in self?.propertiesSheet = nil }
+        sheet.begin(for: window) { [weak self] in
+            self?.propertiesSheet = nil
+            self?.infoPane.refresh()
+        }
+    }
+
+    // MARK: - Info pane
+
+    @objc func toggleInfoPane(_ sender: Any?) {
+        guard let item = infoItem else { return }
+        let show = item.isCollapsed
+        if show { infoPane.refresh() }
+        item.animator().isCollapsed = !show
+        UserDefaults.standard.set(show, forKey: Self.infoVisibleKey)
+    }
+
+    /// Called by the document after it is saved, renamed or moved.
+    func documentInfoChanged() {
+        infoPane.refresh()
     }
 
     // MARK: - Signatures
@@ -393,6 +432,9 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
         case #selector(goForward(_:)): return pdfView.canGoForward
         case #selector(findNextMatch(_:)), #selector(findPreviousMatch(_:)): return !searchResults.isEmpty
         case #selector(showProperties(_:)): return propertiesSheet == nil
+        case #selector(toggleInfoPane(_:)):
+            menuItem.title = (infoItem?.isCollapsed ?? true) ? "Show Info" : "Hide Info"
+            return true
         case #selector(toggleSidebar(_:)):
             let collapsed = splitViewController.splitViewItems.first?.isCollapsed ?? false
             menuItem.title = collapsed ? "Show Sidebar" : "Hide Sidebar"

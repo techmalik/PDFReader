@@ -283,6 +283,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let view = NSMenu(title: "View")
         let sidebar = view.addItem(withTitle: "Show/Hide Sidebar", action: #selector(ReaderWindowController.toggleSidebar(_:)), keyEquivalent: "s")
         sidebar.keyEquivalentModifierMask = [.command, .control]
+        let info = view.addItem(withTitle: "Show Info", action: #selector(ReaderWindowController.toggleInfoPane(_:)), keyEquivalent: "i")
+        info.keyEquivalentModifierMask = [.command, .option]
         view.addItem(.separator())
         view.addItem(withTitle: "Actual Size", action: #selector(ReaderWindowController.zoomActualSize(_:)), keyEquivalent: "0")
         view.addItem(withTitle: "Zoom to Fit", action: #selector(ReaderWindowController.zoomToFit(_:)), keyEquivalent: "9")

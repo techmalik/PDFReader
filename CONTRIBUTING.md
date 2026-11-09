@@ -21,6 +21,7 @@ third-party dependencies; please keep it that way.
 | `Sources/SignatureStore.swift` | The saved-signature library (max 5) and image clean-up for imports |
 | `Sources/SignatureCaptureSheet.swift` | Drawing a signature with the mouse or trackpad |
 | `Sources/SignaturesWindowController.swift` | The signature library window (Sign ▸ Manage Signatures…) |
+| `Sources/InfoPaneViewController.swift` | The Info pane on the right (document, page and file details) |
 | `Sources/PropertiesSheet.swift` | File ▸ Properties (file name and PDF metadata) |
 | `Sources/Appearance.swift` | Light/dark appearance and dark pages |
 | `Sources/SidebarViewController.swift` | Bookmarks and page thumbnails |
