@@ -9,6 +9,25 @@ final class PDFReaderDocument: NSDocument {
 
     override class var autosavesInPlace: Bool { false }
 
+    /// Renames and moves change the file's name and location, which the Info pane shows.
+    override var fileURL: URL? {
+        didSet { notifyInfoChanged() }
+    }
+
+    override func save(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
+                       completionHandler: @escaping (Error?) -> Void) {
+        super.save(to: url, ofType: typeName, for: saveOperation) { [weak self] error in
+            completionHandler(error)
+            self?.notifyInfoChanged()
+        }
+    }
+
+    private func notifyInfoChanged() {
+        DispatchQueue.main.async { [weak self] in
+            self?.windowControllers.compactMap { $0 as? ReaderWindowController }.forEach { $0.documentInfoChanged() }
+        }
+    }
+
     override func read(from url: URL, ofType typeName: String) throws {
         // Load the bytes rather than PDFDocument(url:) so saving over the same file is safe:
         // the in-memory copy never depends on the file that NSDocument replaces when it saves.
