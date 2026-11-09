@@ -19,6 +19,12 @@ Created by **Malik Kabir**. Free and open source under the [MIT License](LICENSE
   from a photo or scan, then place one on any page from the **Sign** toolbar button. Drag to move,
   drag the corner handle to resize, Delete to remove, ⌘Z to undo. Save with ⌘S; the signature is
   written into the file, so it shows in Preview, Acrobat and browsers too.
+- **Markup:** click the pencil toolbar button (or View ▸ Show Markup Toolbar, ⇧⌘A) for a bar above the
+  page with **Highlight**, **Underline**, **Strikethrough**, **Pen**, **Note** and **Eraser**, six colours and
+  three line thicknesses. Drag across text to highlight, underline or strike it through; on scanned pages
+  the highlighter draws a see-through marker stroke instead. Click with Note to add a note (double-click a
+  note to read or edit it). Right-click any markup to change its colour or delete it. ⌘Z undoes, Esc or
+  Done ends markup. Markup is saved into the PDF, so it shows in Preview, Acrobat and browsers too.
 - **Info pane:** click the ⓘ toolbar button (or View ▸ Show Info, ⌥⌘I) for a panel on the right with
   the document's title, author, subject, keywords, creator, producer and dates; the current page's size
   (mm, inches and points), paper name and orientation; file name, size and location; page count,

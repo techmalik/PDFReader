@@ -285,6 +285,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         sidebar.keyEquivalentModifierMask = [.command, .control]
         let info = view.addItem(withTitle: "Show Info", action: #selector(ReaderWindowController.toggleInfoPane(_:)), keyEquivalent: "i")
         info.keyEquivalentModifierMask = [.command, .option]
+        let markup = view.addItem(withTitle: "Show Markup Toolbar", action: #selector(ReaderWindowController.toggleMarkup(_:)), keyEquivalent: "a")
+        markup.keyEquivalentModifierMask = [.command, .shift]
         view.addItem(.separator())
         view.addItem(withTitle: "Actual Size", action: #selector(ReaderWindowController.zoomActualSize(_:)), keyEquivalent: "0")
         view.addItem(withTitle: "Zoom to Fit", action: #selector(ReaderWindowController.zoomToFit(_:)), keyEquivalent: "9")

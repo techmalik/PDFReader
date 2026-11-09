@@ -40,6 +40,25 @@ final class SigningPDFView: PDFView {
 
     /// Dashed frame and resize handle drawn above the page (never part of the PDF).
     private let selectionOverlay = SelectionOverlayView()
+
+    // MARK: Markup state (logic in SigningPDFView+Markup.swift)
+
+    /// The active markup tool, or nil when reading normally.
+    var markupTool: MarkupTool? {
+        didSet {
+            if markupTool == nil { cancelStroke() }
+            if oldValue != markupTool { window?.invalidateCursorRects(for: self) }
+        }
+    }
+    /// Called when Escape is pressed while a markup tool is active.
+    var onEscapeInMarkup: (() -> Void)?
+    /// Live preview of a pen or marker stroke while it's being drawn.
+    let strokePreview = StrokePreviewView()
+    var strokePage: PDFPage?
+    var strokePoints: [CGPoint] = [] // page space
+    var strokeTool: MarkupTool = .pen
+    var textMarkupInProgress = false
+    var erasing = false
     private var observersInstalled = false
 
     override func viewDidMoveToWindow() {
@@ -48,6 +67,8 @@ final class SigningPDFView: PDFView {
         observersInstalled = true
         selectionOverlay.isHidden = true
         addSubview(selectionOverlay, positioned: .above, relativeTo: nil)
+        strokePreview.isHidden = true
+        addSubview(strokePreview, positioned: .above, relativeTo: nil)
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(viewGeometryChanged(_:)), name: .PDFViewScaleChanged, object: self)
         center.addObserver(self, selector: #selector(viewGeometryChanged(_:)), name: .PDFViewDisplayModeChanged, object: self)
@@ -65,6 +86,7 @@ final class SigningPDFView: PDFView {
 
     override func layout() {
         super.layout()
+        strokePreview.frame = bounds
         updateSelectionOverlay()
         updatePageColors()
     }
@@ -226,6 +248,12 @@ final class SigningPDFView: PDFView {
     override func mouseDown(with event: NSEvent) {
         let viewPoint = convert(event.locationInWindow, from: nil)
         guard bounds.contains(viewPoint) else { super.mouseDown(with: event); return }
+        if markupTool != nil {
+            selectedSignature = nil
+            markupMouseDown(with: event, at: viewPoint)
+            return
+        }
+        if event.clickCount == 2, openNote(at: viewPoint) { return }
         guard let (sig, page) = signature(at: viewPoint) else {
             selectedSignature = nil
             dragMode = nil
@@ -245,6 +273,7 @@ final class SigningPDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if markupTool != nil { markupMouseDragged(with: event); return }
         guard let mode = dragMode, let sig = selectedSignature, let page = sig.page else {
             super.mouseDragged(with: event)
             return
@@ -277,6 +306,7 @@ final class SigningPDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if markupTool != nil { markupMouseUp(with: event); return }
         guard let mode = dragMode, let sig = selectedSignature else {
             super.mouseUp(with: event)
             return
@@ -294,12 +324,20 @@ final class SigningPDFView: PDFView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         let viewPoint = convert(event.locationInWindow, from: nil)
+        if let tool = markupTool {
+            markupCursor(for: tool, at: viewPoint)?.set()
+            return
+        }
         if let (sig, page) = signature(at: viewPoint) {
             (isOnResizeHandle(viewPoint, of: sig, on: page) ? NSCursor.crosshair : NSCursor.openHand).set()
         }
     }
 
     override func keyDown(with event: NSEvent) {
+        if markupTool != nil, event.keyCode == 53 { // Escape ends markup
+            onEscapeInMarkup?()
+            return
+        }
         if selectedSignature != nil, let key = event.charactersIgnoringModifiers?.unicodeScalars.first {
             switch Int(key.value) {
             case NSDeleteCharacter, NSDeleteFunctionKey, NSBackspaceCharacter:
@@ -316,7 +354,9 @@ final class SigningPDFView: PDFView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let viewPoint = convert(event.locationInWindow, from: nil)
-        guard let (sig, _) = signature(at: viewPoint) else { return super.menu(for: event) }
+        guard let (sig, _) = signature(at: viewPoint) else {
+            return markupMenu(at: viewPoint) ?? super.menu(for: event)
+        }
         selectedSignature = sig
         let menu = NSMenu()
         let item = menu.addItem(withTitle: "Delete Signature", action: #selector(deleteSelectedSignature(_:)), keyEquivalent: "")

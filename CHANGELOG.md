@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- **Markup:** highlight, underline and strikethrough text, draw with a pen or marker, add notes, and
+  erase, with six colours and three thicknesses (pencil toolbar button or ⇧⌘A). Saved into the PDF.
 - **Info pane:** the ⓘ toolbar button (View ▸ Show Info, ⌥⌘I) opens a panel on the right with the
   PDF's details: title, author, creator, dates, page size and paper, file size, location, PDF version
   and security. It follows the page you're on and remembers whether it was open.
