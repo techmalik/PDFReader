@@ -41,6 +41,13 @@ osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 || true
 rm -rf "${DEST}/${APP_NAME}.app"
 cp -R "${APP}" "${DEST}/"
 "${LSREGISTER}" -f "${DEST}/${APP_NAME}.app" || true
+# Only the installed copy should be registered. Other copies with the same bundle id
+# (the ./build copy, old copies in the Trash) can be picked to open PDFs instead, and
+# when that copy is rebuilt or gone, macOS falls back to Preview. The build copy is only
+# an intermediate here, so remove it (macOS would register it again if it stayed).
+"${LSREGISTER}" -u "${APP}" >/dev/null 2>&1 || true
+rm -rf "${APP}"
+"${LSREGISTER}" -u "$HOME/.Trash/${APP_NAME}.app" >/dev/null 2>&1 || true
 
 echo "==> Launching ${APP_NAME}..."
 open "${DEST}/${APP_NAME}.app"

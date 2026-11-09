@@ -153,6 +153,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc func makeDefault(_ sender: Any?) {
+        // Register this copy first so Launch Services opens PDFs with the app that's running,
+        // not another copy with the same bundle id (a build folder, or one in the Trash).
+        LSRegisterURL(Bundle.main.bundleURL as CFURL, true)
         NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpen: .pdf) { error in
             DispatchQueue.main.async {
                 let alert = NSAlert()
