@@ -8,6 +8,7 @@ private extension NSToolbarItem.Identifier {
     static let readerSearch = NSToolbarItem.Identifier("pdfreader.search")
     static let readerSign = NSToolbarItem.Identifier("pdfreader.sign")
     static let readerInfo = NSToolbarItem.Identifier("pdfreader.info")
+    static let readerMarkup = NSToolbarItem.Identifier("pdfreader.markup")
     static let readerDarkPages = NSToolbarItem.Identifier("pdfreader.darkPages")
 }
 
@@ -22,6 +23,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
     private let infoPane: InfoPaneViewController
     private var infoItem: NSSplitViewItem?
     private static let infoVisibleKey = "infoPaneVisible"
+    private let markupBar = MarkupBar()
 
     /// The reader window the user is working in, for actions that come from other windows.
     static var frontmost: ReaderWindowController? {
@@ -56,6 +58,12 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
 
         window.delegate = self
         infoPane.onEdit = { [weak self] in self?.showProperties(nil) }
+        markupBar.onDone = { [weak self] in self?.setMarkupActive(false) }
+        markupBar.onToolChange = { [weak self] tool in
+            guard let self = self, self.pdfView.markupTool != nil else { return }
+            self.pdfView.markupTool = tool
+        }
+        pdfView.onEscapeInMarkup = { [weak self] in self?.setMarkupActive(false) }
         configurePDFView(with: pdf)
         configureLayout(in: window, size: size)
         configureToolbar(in: window)
@@ -93,7 +101,14 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
 
         let content = NSViewController()
         pdfView.frame = NSRect(origin: .zero, size: size)
-        content.view = pdfView
+        markupBar.isHidden = true
+        let column = NSStackView(views: [markupBar, pdfView])
+        column.orientation = .vertical
+        column.spacing = 0
+        column.alignment = .width
+        column.detachesHiddenViews = true
+        column.frame = NSRect(origin: .zero, size: size)
+        content.view = column
         let contentItem = NSSplitViewItem(viewController: content)
         contentItem.minimumThickness = 300
 
@@ -124,7 +139,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
     // MARK: - Toolbar
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .flexibleSpace, .readerZoomOut, .readerZoomIn, .readerSign, .readerDarkPages, .readerPrint, .readerSearch, .readerInfo]
+        [.toggleSidebar, .flexibleSpace, .readerZoomOut, .readerZoomIn, .readerMarkup, .readerSign, .readerDarkPages, .readerPrint, .readerSearch, .readerInfo]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -142,6 +157,10 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
             return makeButtonItem(itemIdentifier, "Print", "printer", #selector(printFromToolbar(_:)))
         case .readerDarkPages:
             return makeButtonItem(itemIdentifier, "Dark Pages", "moon", #selector(toggleDarkPages(_:)))
+        case .readerMarkup:
+            let item = makeButtonItem(itemIdentifier, "Markup", "pencil.tip.crop.circle", #selector(toggleMarkup(_:)))
+            item.toolTip = "Highlight, underline, draw and add notes (⇧⌘A)"
+            return item
         case .readerInfo:
             let item = makeButtonItem(itemIdentifier, "Info", "info.circle", #selector(toggleInfoPane(_:)))
             item.toolTip = "Show or hide document info (⌥⌘I)"
@@ -321,6 +340,28 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
         }
     }
 
+    // MARK: - Markup
+
+    @objc func toggleMarkup(_ sender: Any?) {
+        setMarkupActive(pdfView.markupTool == nil)
+    }
+
+    private func setMarkupActive(_ active: Bool) {
+        if active, let reason = readerDocument?.editingBlockedReason {
+            guard let window = window else { return }
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "This PDF can’t be marked up"
+            alert.informativeText = reason
+            alert.beginSheetModal(for: window)
+            return
+        }
+        pdfView.markupTool = active ? MarkupSettings.tool : nil
+        pdfView.clearSelection()
+        markupBar.isHidden = !active
+        if active { window?.makeFirstResponder(pdfView) }
+    }
+
     // MARK: - Info pane
 
     @objc func toggleInfoPane(_ sender: Any?) {
@@ -432,6 +473,9 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate, NSTool
         case #selector(goForward(_:)): return pdfView.canGoForward
         case #selector(findNextMatch(_:)), #selector(findPreviousMatch(_:)): return !searchResults.isEmpty
         case #selector(showProperties(_:)): return propertiesSheet == nil
+        case #selector(toggleMarkup(_:)):
+            menuItem.title = pdfView.markupTool == nil ? "Show Markup Toolbar" : "Hide Markup Toolbar"
+            return true
         case #selector(toggleInfoPane(_:)):
             menuItem.title = (infoItem?.isCollapsed ?? true) ? "Show Info" : "Hide Info"
             return true

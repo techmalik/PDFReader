@@ -18,6 +18,9 @@ third-party dependencies; please keep it that way.
 | `Sources/PDFReaderDocument.swift` | Opening, saving and printing a PDF (`NSDocument`) |
 | `Sources/ReaderWindowController.swift` | Reader window, toolbar, search, navigation |
 | `Sources/SigningPDFView.swift` | The PDF view: placing, moving, resizing and deleting signatures |
+| `Sources/Markup.swift` | Markup tools, colour palette and thickness settings |
+| `Sources/MarkupBar.swift` | The Markup bar above the page |
+| `Sources/SigningPDFView+Markup.swift` | Drawing highlights, underlines, strikethroughs, pen strokes, notes and erasing |
 | `Sources/SignatureStore.swift` | The saved-signature library (max 5) and image clean-up for imports |
 | `Sources/SignatureCaptureSheet.swift` | Drawing a signature with the mouse or trackpad |
 | `Sources/SignaturesWindowController.swift` | The signature library window (Sign ▸ Manage Signatures…) |
